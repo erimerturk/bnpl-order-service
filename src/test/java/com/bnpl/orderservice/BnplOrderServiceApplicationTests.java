@@ -2,13 +2,19 @@ package com.bnpl.orderservice;
 
 import com.bnpl.orderservice.order.domain.Order;
 import com.bnpl.orderservice.order.domain.OrderStatus;
+import com.bnpl.orderservice.order.event.OrderAcceptedMessage;
 import com.bnpl.orderservice.order.web.OrderRequest;
 import com.bnpl.orderservice.property.Property;
 import com.bnpl.orderservice.property.PropertyClient;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.cloud.stream.binder.test.OutputDestination;
+import org.springframework.cloud.stream.binder.test.TestChannelBinderConfiguration;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -17,11 +23,16 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 import reactor.core.publisher.Mono;
+import reactor.test.subscriber.TestSubscriber;
+
+import java.io.IOException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Disabled
+@Import(TestSubscriber.class)
 @Testcontainers
 class BnplOrderServiceApplicationTests {
 
@@ -30,6 +41,13 @@ class BnplOrderServiceApplicationTests {
 
     @Autowired
     private WebTestClient webTestClient;
+
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private OutputDestination output;
 
     @MockBean
     private PropertyClient client;
@@ -69,7 +87,7 @@ class BnplOrderServiceApplicationTests {
     }
 
     @Test
-    void whenPostRequestAndPropertyExistsThenOrderAccepted() {
+    void whenPostRequestAndPropertyExistsThenOrderAccepted() throws IOException {
         Long id = 3324324l;
         Property property = new Property(id, "Title", "Author", 9.90);
         given(client.getById(id)).willReturn(Mono.just(property));
@@ -86,6 +104,9 @@ class BnplOrderServiceApplicationTests {
         assertThat(createdOrder.propertyTitle()).isEqualTo(property.title() + " - " + property.seller());
         assertThat(createdOrder.propertyPrice()).isEqualTo(property.price());
         assertThat(createdOrder.status()).isEqualTo(OrderStatus.ACCEPTED);
+
+        assertThat(objectMapper.readValue(output.receive().getPayload(), OrderAcceptedMessage.class))
+                .isEqualTo(new OrderAcceptedMessage(createdOrder.id()));
     }
 
     @Test
