@@ -13,6 +13,10 @@ spec:
     metadata:
       labels:
         app: bnpl-order-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: "9002"
     spec:
       containers:
         - name: bnpl-order-service
@@ -27,7 +31,22 @@ spec:
           env:
             - name: BPL_JVM_THREAD_COUNT
               value: "50"
-            - name: SPRING_CLOUD_CONFIG_URI
-              value: http://bnpl-config-service
-            - name: SPRING_DATASOURCE_URL
-              value: jdbc:postgresql://bnpl-postgres/bnpldb_order
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 9002
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 9002
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          volumeMounts:
+            - name: bnpl-order-config-volume
+              mountPath: /workspace/config
+      volumes:
+        - name: bnpl-order-config-volume
+          configMap:
+            name: bnpl-order-config
